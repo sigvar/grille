@@ -13,7 +13,7 @@ Il faut saisir
      les cases sans intersection avec le polygone
 
 Comme les colonnes de la table d'origine sont reprises et que des colonnes sont ajoutees, en cas de conflit de nom
-le script s'arrete
+le script s'arrete.
 
 La couche de sortie en plus des attributs conserves presente 5 attributs supplementaires
  'id_poly'       un entier pour chaque objet d'origine
