@@ -1,36 +1,40 @@
 Ce script vise a faciliter l'utilisation de l'atlas du composeur d'impression.
+==============================================================================
+
 Il genere une couche de couverture d'une autre couche adaptee a une echelle fixe definie.
 
-L'enveloppe d'un objet est calculee, on en deduit le nombre de dalles qu'on repartit en les centrant sur l'objet
+L'enveloppe d'un objet est calculee, on en deduit le nombre de dalles qu'on repartit en les centrant sur l'objet.
 
-Il faut saisir
-   la couche d'entree,
-   la taille d'une dalle
-   si l'on souhaite les coordonnees de l'enveloppe de l'objet d'origine
-   si on ne conserve que les cases sans intersection avec le polygone
-   si on indique un nombre d'essais d'optimisation, l'algorithme cherche a minimiser le nombre de cases par polygones
+Il faut saisir :
+- la couche d'entree,
+- la taille d'une dalle,
+- si l'on souhaite les coordonnees de l'enveloppe de l'objet d'origine,
+- si on ne conserve que les cases sans intersection avec le polygone,
+- si on indique un nombre d'essais d'optimisation, l'algorithme cherche a minimiser le nombre de cases par polygones
      en deplaçant les cases par des pas d'une finesse proportionnelle a l'importance de cette valeur, il ne conserve que
-     les cases sans intersection avec le polygone
+     les cases sans intersection avec le polygone.
 
 Comme les colonnes de la table d'origine sont reprises et que des colonnes sont ajoutees, en cas de conflit de nom
 le script s'arrete.
 
-La couche de sortie en plus des attributs conserves presente 5 attributs supplementaires
- 'id_poly'       un entier pour chaque objet d'origine
- 'ord_x_grid'    un entier pour chaque ligne de dalles de chaque 'id_poly'
- 'ord_y_grid'    un entier pour chaque colonne de dalles de chaque 'id_poly'
- 'id_grid'       un entier unique par dalle
- 'ord_poly_grid' un entier unique par dalle pour chaque 'id_poly'
+La couche de sortie en plus des attributs conserves presente 5 attributs supplementaires :
+- 'id_poly'       un entier pour chaque objet d'origine
+- 'ord_x_grid'    un entier pour chaque ligne de dalles de chaque 'id_poly'
+- 'ord_y_grid'    un entier pour chaque colonne de dalles de chaque 'id_poly'
+- 'id_grid'       un entier unique par dalle
+- 'ord_poly_grid' un entier unique par dalle pour chaque 'id_poly'
 
-Et si on a demande les coordonnees de l'enveloppe de l'objet d'origine
- 'min_x_poly'    un double pour la valeur x min
- 'max_x_poly'    un double pour la valeur x max
- 'min_y_poly'    un double pour la valeur y min
- 'max_y_poly'    un double pour la valeur y max
+Et si on a demande les coordonnees de l'enveloppe de l'objet d'origine :
+- 'min_x_poly'    un double pour la valeur x min
+- 'max_x_poly'    un double pour la valeur x max
+- 'min_y_poly'    un double pour la valeur y min
+- 'max_y_poly'    un double pour la valeur y max
 
 On peut filtrer l'affichage de la grille quand un composeur est actif en utilisant dans le style une regle comme :
- "id_objet" = attribute( $atlasfeature, 'id_objet' )
+- "id_objet" = attribute( $atlasfeature, 'id_objet' )
 
 V1.b du 27 mai 2016 os@i-carre.net
+
 V1.1 du 27 mai 2016 jean-christophe.baudin@onema.fr
+
 V1.2 du 29 mai 2016 os@i-carre.net
