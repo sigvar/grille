@@ -77,9 +77,7 @@ attributs_sup_env = ('min_x_poly', 'max_x_poly', 'min_y_poly', 'max_y_poly', )
 for f in fields:
     dp_grille.addAttributes([f])
     field_name = f.name()
-    if field_name in attributs_sup:
-        raise NameError('le champ %s existe deja, modifier le code du script ou la table '%field_name)
-    if enveloppe and field_name in attributs_sup_env:
+    if field_name in attributs_sup or (enveloppe and field_name in attributs_sup_env):
         raise NameError('le champ %s existe deja, modifier le code du script ou la table '%field_name)
 
 for attr in attributs_sup:
