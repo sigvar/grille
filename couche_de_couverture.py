@@ -1,23 +1,48 @@
 ##Vector=group
 ##Couche_de_couverture=name
 ##Couche_de_polygones=vector
-##pas_en_x=number 3000.0
-##pas_en_y=number 3000.0
+##pas_en_x=number 10300.0
+##pas_en_y=number 6400.0
 ##enveloppe=boolean True
 ##uniquement_intersecte=boolean False
 ##nombre_essais_optimisation=number 0
-# une valeur par defaut doit etre definie pour une variable numerique ici 5000m
+# une valeur par defaut doit etre definie pour une variable numerique ici 10300mx6400m
 # a parametrer selon vos besoins habituels...
 """
-Ce script vise a faciliter l'utilisation du plugin Atlas dans le composeur d'impression, 
-il genere une couche de couverture d'une autre couche adaptee a une echelle voulue definie par pas_en_x et pas_en_y
+Ce script vise a faciliter l'utilisation de l'atlas du composeur d'impression.
+Il genere une couche de couverture d'une autre couche adaptee a une echelle fixe definie.
 
-- Si on coche uniquement intersecte les cases sans intersection avec un polygone ne sont pas conservees
-- Si on indique un nombre d'essais d'optimisation, l'algorithme cherche a minimiser le nombre de cases par polygones
-en déplaçant les cases par des pas d'une finesse proportionnelle a l'importance de cette valeur
-- Comme les colonnes de la table d'origine sont reprises et que des colonnes sont ajoutees, en cas de conflit de nom
-le script s'arrete
+L'enveloppe d'un objet est calculee, on en deduit le nombre de dalles qu'on repartit en les centrant sur l'objet
 
+Il faut saisir
+   la couche d'entree,
+   la taille d'une dalle
+   si l'on souhaite les coordonnees de l'enveloppe de l'objet d'origine
+   si on ne conserve que les cases sans intersection avec le polygone
+   si on indique un nombre d'essais d'optimisation, l'algorithme cherche a minimiser le nombre de cases par polygones
+     en deplaçant les cases par des pas d'une finesse proportionnelle a l'importance de cette valeur, il ne conserve que
+     les cases sans intersection avec le polygone
+
+Comme les colonnes de la table d'origine sont reprises et que des colonnes sont ajoutees, en cas de conflit de nom
+le script s'arrete.
+
+La couche de sortie en plus des attributs conserves presente 5 attributs supplementaires
+ 'id_poly'       un entier pour chaque objet d'origine
+ 'ord_x_grid'    un entier pour chaque ligne de dalles de chaque 'id_poly'
+ 'ord_y_grid'    un entier pour chaque colonne de dalles de chaque 'id_poly'
+ 'id_grid'       un entier unique par dalle
+ 'ord_poly_grid' un entier unique par dalle pour chaque 'id_poly'
+
+Et si on a demande les coordonnees de l'enveloppe de l'objet d'origine
+ 'min_x_poly'    un double pour la valeur x min
+ 'max_x_poly'    un double pour la valeur x max
+ 'min_y_poly'    un double pour la valeur y min
+ 'max_y_poly'    un double pour la valeur y max
+
+On peut filtrer l'affichage de la grille quand un composeur est actif en utilisant dans le style une regle comme :
+ "id_objet" = attribute( $atlasfeature, 'id_objet' )
+
+V1.b du 27 mai 2016 os@i-carre.net
 V1.1 du 27 mai 2016 jean-christophe.baudin@onema.fr
 V1.2 du 29 mai 2016 os@i-carre.net
 """
@@ -33,9 +58,9 @@ arrondi_sup = lambda x : int(x) if x == int(x) * 1. else int(round(x + .5))
 milieu = lambda a, b : a + (b - a) / 2
 
 # pre-traitement des variables
-nombre_essais_optimisation = int(max(0, nombre_essais_optimisation))
+nombre_essais_optimisation = min(50, int(max(0, nombre_essais_optimisation))) # on limite a 50, un tableau 101x101 c'est deja pas mal !
 if nombre_essais_optimisation > 0:
-    uniquement_intersecte = True 
+    uniquement_intersecte = True
 
 essais_optimisation = range(-nombre_essais_optimisation, nombre_essais_optimisation + 1)
 
@@ -47,14 +72,12 @@ grille = QgsVectorLayer("Polygon", "Couche_de_couverture_de_"+ str(layer.name())
 QgsMapLayerRegistry.instance().addMapLayer(grille)
 dp_grille = grille.dataProvider()
 
-attributs_sup = ('id_poly', 'ord_x_grid', 'ord_y_grid', 'id_grid')
+attributs_sup = ('id_poly', 'ord_x_grid', 'ord_y_grid', 'id_grid', 'ord_poly_grid')
 attributs_sup_env = ('min_x_poly', 'max_x_poly', 'min_y_poly', 'max_y_poly', )
 for f in fields:
     dp_grille.addAttributes([f])
     field_name = f.name()
-    if field_name in attributs_sup:
-        raise NameError('le champ %s existe deja, modifier le code du script ou la table '%field_name)
-    if enveloppe and field_name in attributs_sup_env:
+    if field_name in attributs_sup or (enveloppe and field_name in attributs_sup_env):
         raise NameError('le champ %s existe deja, modifier le code du script ou la table '%field_name)
 
 for attr in attributs_sup:
@@ -72,8 +95,6 @@ grille.startEditing()
 id_grid = 0
 for feature in feats:
     progress.setPercentage(int(100 * id_poly / nb_feat))
-    id_poly += 1
-    feat_attributes = feature.attributes()
 
     # get the feature bounding box
     feat_geom = feature.geometry().boundingBox()
@@ -138,7 +159,9 @@ for feature in feats:
                 ajustement_y_pas = j - nombre_essais_optimisation
                 #break
     # on peut maintenant creer la grille pour ce polygone
+    id_poly += 1
     ord_x_grid = 0
+    ord_poly_grid = 0
     for case_x in range(nombre_case_x):
         ord_x_grid += 1
         ord_y_grid = 0
@@ -152,10 +175,11 @@ for feature in feats:
             if not uniquement_intersecte or (uniquement_intersecte and rectangle.intersects(feature.geometry())):
                 ord_y_grid += 1
                 id_grid += 1
+                ord_poly_grid += 1
                 new_feat = QgsFeature()
                 new_feat.setGeometry(rectangle)
-                attribute_values = feat_attributes[:]
-                attribute_values.extend([id_poly, ord_x_grid, ord_y_grid, id_grid])
+                attribute_values = feature.attributes()[:]
+                attribute_values.extend([id_poly, ord_x_grid, ord_y_grid, id_grid, ord_poly_grid])
                 if enveloppe:
                     attribute_values.extend([min_x_poly, max_x_poly, min_y_poly, max_y_poly])
                 new_feat.setAttributes(attribute_values)
