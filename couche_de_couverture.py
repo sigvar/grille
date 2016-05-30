@@ -72,7 +72,7 @@ grille = QgsVectorLayer("Polygon", "Couche_de_couverture_de_"+ str(layer.name())
 QgsMapLayerRegistry.instance().addMapLayer(grille)
 dp_grille = grille.dataProvider()
 
-attributs_sup = ('id_poly', 'ord_x_grid', 'ord_y_grid', 'id_grid')
+attributs_sup = ('id_poly', 'ord_x_grid', 'ord_y_grid', 'id_grid', 'ord_poly_grid')
 attributs_sup_env = ('min_x_poly', 'max_x_poly', 'min_y_poly', 'max_y_poly', )
 for f in fields:
     dp_grille.addAttributes([f])
@@ -163,6 +163,7 @@ for feature in feats:
     # on peut maintenant creer la grille pour ce polygone
     id_poly += 1
     ord_x_grid = 0
+    ord_poly_grid = 0
     for case_x in range(nombre_case_x):
         ord_x_grid += 1
         ord_y_grid = 0
@@ -176,10 +177,11 @@ for feature in feats:
             if not uniquement_intersecte or (uniquement_intersecte and rectangle.intersects(feature.geometry())):
                 ord_y_grid += 1
                 id_grid += 1
+                ord_poly_grid += 1
                 new_feat = QgsFeature()
                 new_feat.setGeometry(rectangle)
                 attribute_values = feature.attributes()[:]
-                attribute_values.extend([id_poly, ord_x_grid, ord_y_grid, id_grid])
+                attribute_values.extend([id_poly, ord_x_grid, ord_y_grid, id_grid, ord_poly_grid])
                 if enveloppe:
                     attribute_values.extend([min_x_poly, max_x_poly, min_y_poly, max_y_poly])
                 new_feat.setAttributes(attribute_values)
