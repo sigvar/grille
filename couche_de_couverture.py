@@ -1,14 +1,18 @@
 ##Vector=group
 ##couche_de_couverture=name
 ##couche_de_polygones=vector
-##pas_en_x=number 10300.0
-##pas_en_y=number 6400.0
-##overlap_percentage=number 10.0
+##pas_en_x=number 5000.0
+##pas_en_y=number 5000.0
+##overlap_percentage=number 10
+##dalle=boolean True
 ##enveloppe=boolean True
-##uniquement_intersecte=boolean False
+##uniquement_intersecte=boolean True
 ##nombre_essais_optimisation=number 0
 """
- ***************************************************************************
+ couche_de_couverture
+======================
+
+/***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -17,8 +21,8 @@
  *                                                                         *
  ***************************************************************************/
 
-Ce script vise a faciliter l'utilisation de l'atlas du composeur d'impression.
-==============================================================================
+Ce script vise a faciliter l'utilisation de l'atlas du composeur d'impression
+-----------------------------------------------------------------------------
 
 Il genere une couche de couverture d'une autre couche adaptee a une echelle fixe definie.
 
@@ -27,9 +31,11 @@ L'enveloppe d'un objet est calculee, on en deduit le nombre de dalles qu'on repa
 Il faut saisir :
 - la couche d'entree,
 - la taille d'une dalle,
-- si l'on souhaite les coordonnees de l'enveloppe de l'objet d'origine,
+- un pourcentage de recouvrement autour du polygone
+- si on souhaite les coordonnees de chaque dalle,
+- si on souhaite les coordonnees de l'enveloppe de l'objet d'origine,
 - si on ne conserve que les cases sans intersection avec le polygone,
-- si on indique un nombre d'essais d'optimisation, l'algorithme cherche a minimiser le nombre de cases par polygones
+- et quand on indique un nombre d'essais d'optimisation, l'algorithme cherche a minimiser le nombre de cases par polygones
      en deplaçant les cases par des pas d'une finesse proportionnelle a l'importance de cette valeur, il ne conserve que
      les cases sans intersection avec le polygone.
 
@@ -43,6 +49,12 @@ La couche de sortie en plus des attributs conserves presente 5 attributs supplem
 - 'id_grid'       un entier unique par dalle
 - 'ord_poly_grid' un entier unique par dalle pour chaque 'id_poly'
 
+Et si on a demande les coordonnees de la dalle :
+- 'min_x_grid'    un double pour la valeur x min
+- 'max_x_grid'    un double pour la valeur x max
+- 'min_y_grid'    un double pour la valeur y min
+- 'max_y_grid'    un double pour la valeur y max
+
 Et si on a demande les coordonnees de l'enveloppe de l'objet d'origine :
 - 'min_x_poly'    un double pour la valeur x min
 - 'max_x_poly'    un double pour la valeur x max
@@ -54,11 +66,10 @@ On peut filtrer l'affichage de la grille quand un composeur est actif en utilisa
 
 Versions :
 - V1.b du 27 mai 2016 os@i-carre.net
-- V1.0 du 27 mai 2016 jean-christophe.baudin@onema.fr
-- V1.1 du 27 mai 2016
+- V1.1 du 27 mai 2016 jean-christophe.baudin@onema.fr
 - V1.2 du 29 mai 2016
 - V1.3 du 31 mai 2016
-- V1.4 du 31 mai 2016
+- V1.4 du 31 mai 2016 os@i-carre.net
 """
 from qgis.core import *
 from PyQt4.QtCore import *
@@ -96,6 +107,7 @@ QgsMapLayerRegistry.instance().addMapLayer(grille)
 dp_grille = grille.dataProvider()
 
 attributs_sup = ('id_poly', 'ord_x_grid', 'ord_y_grid', 'id_grid', 'ord_poly_grid')
+attributs_sup_grid = ('min_x_grid', 'max_x_grid', 'min_y_grid', 'max_y_grid', )
 attributs_sup_env = ('min_x_poly', 'max_x_poly', 'min_y_poly', 'max_y_poly', )
 for f in fields:
     dp_grille.addAttributes([f])
@@ -105,6 +117,10 @@ for f in fields:
 
 for attr in attributs_sup:
     dp_grille.addAttributes([QgsField(attr, QVariant.Int)])
+
+if dalle:
+    for attr in attributs_sup_grid:
+        dp_grille.addAttributes([QgsField(attr, QVariant.Double)])
 
 if enveloppe:
     for attr in attributs_sup_env:
@@ -126,6 +142,17 @@ for feature in feats:
     min_y_poly = feat_geom.yMinimum()
     max_y_poly = feat_geom.yMaximum()
 
+    # buffer autour de l'objet
+    if overlap_percentage > 0:
+        feat_buffer = feature.geometry().buffer(overlap_percentage / 100 * max((max_x_poly - min_x_poly), (max_y_poly - min_y_poly)), 10)
+        feat_geom = feat_buffer.boundingBox()
+        min_x_poly = feat_geom.xMinimum()
+        max_x_poly = feat_geom.xMaximum()
+        min_y_poly = feat_geom.yMinimum()
+        max_y_poly = feat_geom.yMaximum()
+    else:
+        feat_buffer = feature.geometry()
+
     # dimensions des cases/dalles
     nombre_case_x = int(ceil((max_x_poly - min_x_poly) / pas_en_x))
     nombre_case_y = int(ceil((max_y_poly - min_y_poly) / pas_en_y))
@@ -137,7 +164,7 @@ for feature in feats:
     ajustement_y = ((max_y_poly - min_y_poly) - nombre_case_y * pas_en_y) / 2. / max(1, nombre_essais_optimisation)
 
     # pour determiner une position du bloc de dalles minimisant le nombre de dalles on cree un
-    # tableau des nombres de cases intersectant le polygone selon les decalages en x et y
+    # tableau des nombres de cases intersectant le polygone (ou son buffer) selon les decalages en x et y
     resultats = []
     for i in range(len(essais_optimisation)):
         resultats.append([])
@@ -153,7 +180,7 @@ for feature in feats:
                                         minimum_y + case_y * pas_en_y + ajustement_y_pas * ajustement_y, \
                                         minimum_x + (case_x + 1) * pas_en_x + ajustement_x_pas * ajustement_x, \
                                         minimum_y + (case_y + 1) * pas_en_y + ajustement_y_pas * ajustement_y))
-                    if rectangle.intersects(feature.geometry()):
+                    if rectangle.intersects(feat_buffer):
                         resultats[ajustement_x_pas + nombre_essais_optimisation][ajustement_y_pas + nombre_essais_optimisation] += 1
     # calcul du minimum des cases selon les decalages en x et y
     minimum_case = resultats[0][0]
@@ -189,19 +216,12 @@ for feature in feats:
         ord_x_grid += 1
         ord_y_grid = 0
         for case_y in range(nombre_case_y):
-            rectangle = QgsGeometry.fromRect( \
-                            QgsRectangle( \
-                                minimum_x + case_x * pas_en_x + ajustement_x_pas * ajustement_x, \
-                                minimum_y + case_y * pas_en_y + ajustement_y_pas * ajustement_y, \
-                                minimum_x + (case_x + 1) * pas_en_x + ajustement_x_pas * ajustement_x, \
-                                minimum_y + (case_y + 1) * pas_en_y + ajustement_y_pas * ajustement_y))
-            if not uniquement_intersecte or (uniquement_intersecte and rectangle.intersects(feature.geometry())):
-                rectangle = QgsGeometry.fromRect( \
-                                QgsRectangle( \
-                                    minimum_x - overlap_percentage * pas_en_x / 100. + case_x * pas_en_x + ajustement_x_pas * ajustement_x, \
-                                    minimum_y - overlap_percentage * pas_en_y / 100. + case_y * pas_en_y + ajustement_y_pas * ajustement_y, \
-                                    minimum_x + overlap_percentage * pas_en_x / 100. + (case_x + 1) * pas_en_x + ajustement_x_pas * ajustement_x, \
-                                    minimum_y + overlap_percentage * pas_en_y / 100. + (case_y + 1) * pas_en_y + ajustement_y_pas * ajustement_y))
+            min_x_grid = minimum_x + case_x * pas_en_x + ajustement_x_pas * ajustement_x
+            min_y_grid = minimum_y + case_y * pas_en_y + ajustement_y_pas * ajustement_y
+            max_x_grid = minimum_x + (case_x + 1) * pas_en_x + ajustement_x_pas * ajustement_x
+            max_y_grid = minimum_y + (case_y + 1) * pas_en_y + ajustement_y_pas * ajustement_y
+            rectangle = QgsGeometry.fromRect(QgsRectangle( min_x_grid, min_y_grid, max_x_grid, max_y_grid))
+            if not uniquement_intersecte or (uniquement_intersecte and rectangle.intersects(feat_buffer)):
                 ord_y_grid += 1
                 id_grid += 1
                 ord_poly_grid += 1
@@ -209,6 +229,8 @@ for feature in feats:
                 new_feat.setGeometry(rectangle)
                 attribute_values = feature.attributes()[:]
                 attribute_values.extend([id_poly, ord_x_grid, ord_y_grid, id_grid, ord_poly_grid])
+                if dalle:
+                    attribute_values.extend([min_x_grid, max_x_grid, min_y_grid, max_y_grid])
                 if enveloppe:
                     attribute_values.extend([min_x_poly, max_x_poly, min_y_poly, max_y_poly])
                 new_feat.setAttributes(attribute_values)
