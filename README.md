@@ -1,5 +1,17 @@
-Ce script vise a faciliter l'utilisation de l'atlas du composeur d'impression.
-==============================================================================
+ couche_de_couverture 
+======================
+
+***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
+
+Ce script vise a faciliter l'utilisation de l'atlas du composeur d'impression
+-----------------------------------------------------------------------------
 
 Il genere une couche de couverture d'une autre couche adaptee a une echelle fixe definie.
 
@@ -8,9 +20,11 @@ L'enveloppe d'un objet est calculee, on en deduit le nombre de dalles qu'on repa
 Il faut saisir :
 - la couche d'entree,
 - la taille d'une dalle,
-- si l'on souhaite les coordonnees de l'enveloppe de l'objet d'origine,
+- un pourcentage de recouvrement autour du polygone
+- si on souhaite les coordonnees de chaque dalle,
+- si on souhaite les coordonnees de l'enveloppe de l'objet d'origine,
 - si on ne conserve que les cases sans intersection avec le polygone,
-- si on indique un nombre d'essais d'optimisation, l'algorithme cherche a minimiser le nombre de cases par polygones
+- et quand on indique un nombre d'essais d'optimisation, l'algorithme cherche a minimiser le nombre de cases par polygones
      en deplaçant les cases par des pas d'une finesse proportionnelle a l'importance de cette valeur, il ne conserve que
      les cases sans intersection avec le polygone.
 
@@ -24,6 +38,12 @@ La couche de sortie en plus des attributs conserves presente 5 attributs supplem
 - 'id_grid'       un entier unique par dalle
 - 'ord_poly_grid' un entier unique par dalle pour chaque 'id_poly'
 
+Et si on a demande les coordonnees de la dalle :
+- 'min_x_grid'    un double pour la valeur x min
+- 'max_x_grid'    un double pour la valeur x max
+- 'min_y_grid'    un double pour la valeur y min
+- 'max_y_grid'    un double pour la valeur y max
+
 Et si on a demande les coordonnees de l'enveloppe de l'objet d'origine :
 - 'min_x_poly'    un double pour la valeur x min
 - 'max_x_poly'    un double pour la valeur x max
@@ -33,8 +53,9 @@ Et si on a demande les coordonnees de l'enveloppe de l'objet d'origine :
 On peut filtrer l'affichage de la grille quand un composeur est actif en utilisant dans le style une regle comme :
 - "id_objet" = attribute( $atlasfeature, 'id_objet' )
 
-V1.b du 27 mai 2016 os@i-carre.net
-
-V1.1 du 27 mai 2016 jean-christophe.baudin@onema.fr
-
-V1.2 du 29 mai 2016 os@i-carre.net
+Versions :
+- V1.b du 27 mai 2016 os@i-carre.net
+- V1.1 du 27 mai 2016 jean-christophe.baudin@onema.fr
+- V1.2 du 29 mai 2016
+- V1.3 du 31 mai 2016
+- V1.4 du 31 mai 2016 os@i-carre.net
