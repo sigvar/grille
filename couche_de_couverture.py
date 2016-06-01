@@ -92,7 +92,7 @@ if pas_en_x <= 0 or pas_en_y <= 0:
 
 # trop c'est trop !
 if overlap_percentage > 45:
-    QMessageBox.information(None,"Information:", " You choose %s\%. for overlap percentage.\nIt will be reduced to 45% ...\nWhy not try something around 10% next time ? "%overlap_percentage)
+    QMessageBox.information(None,"Information:", " You choose %s. for overlap percentage.\nIt will be reduced to 45 ...\nWhy not try something around 10 next time ? "%overlap_percentage)
     percent = 45
 
 # on ne garde que les dalles qui intersectent le polygone si on a defini un pas de decalage
