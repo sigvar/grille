@@ -156,7 +156,7 @@ for feature in feats:
 
     # s'il est demande un buffer autour de l'objet
     if overlap_percentage > 0:
-        buffer_geom = feature.geometry().buffer(overlap_percentage / 100 * max((max_x_poly - min_x_poly), (max_y_poly - min_y_poly)), 10)
+        buffer_geom = feature.geometry().buffer(overlap_percentage / 100.0 * max((max_x_poly - min_x_poly), (max_y_poly - min_y_poly)), 10)
         bounding_geom = buffer_geom.boundingBox()
         min_x_poly = bounding_geom.xMinimum()
         max_x_poly = bounding_geom.xMaximum()
