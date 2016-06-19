@@ -1,5 +1,5 @@
 ##Vector=group
-##couche_de_couverture=name
+##couche_de_couverture_v160=name
 ##couche_de_polygones=vector
 ##champ_de_tri=field couche_de_polygones
 ##largeur_d_une_dalle=number 7000.0
@@ -9,6 +9,8 @@
 ##emprise_de_l_objet=boolean False
 ##sans_dalle_blanche=boolean False
 ##pas_de_decalage_pour_chercher_un_minimum_de_dalles=number 0
+##couche_de_couverture=output vector
+
 """
  couche_de_couverture
 ======================
@@ -51,6 +53,8 @@ La couche de sortie en plus des attributs conserves presente 4 attributs supplem
 - 'id_poly'       un entier pour chaque objet d'origine
 - 'id_tile'       un entier unique par dalle
 - 'id_poly_tile'  un entier unique par dalle pour chaque 'id_poly'
+- 'row_poly_tile' la ligne de la dalle pour chaque 'id_poly'
+- 'col_poly_tile' la colonne de la dalle pour chaque 'id_poly'
 - 'ord_poly_tile' une valeur de tri composee du champ choisi et de l'entier unique par dalle pour chaque 'id_poly'
 
 Et si on a demande les coordonnees de la dalle :
@@ -71,8 +75,8 @@ ou e version de QGIS >= 14
 - "id_poly" = attribute( @atlasfeature, 'id_poly' )
 
 Versions :
-- V1.b du 27 mai 2016 osvy
-- V1.1 du 27 mai 2016 jean-christophe.baudin@onema.fr
+- V1.b du 27 mai 2016 version python ogr osvy
+- V1.1 du 27 mai 2016 version processing jean-christophe.baudin@onema.fr
 - V1.2 du 29 mai 2016
 - V1.3 du 31 mai 2016
 - V1.4 du 31 mai 2016 changement complet du traitement des optimisations
@@ -80,20 +84,29 @@ Versions :
                       quelques variables renommees,
                       une chaine de tri ajoutee en sortie
 - V1.5.1 du 3 juin 2016 renommage de variables
+- V1.5.2 du 18 juin 2016 numérotation des dalles en lignes et colonnes pour chaque polygone
+- V1.6.0 du 19 juin 2016 possibilite d'enregistrer la couche produite sur disque,
+                        renommage de variables en vue version anglaise,
+                        verifie que la couche en entree est une couche de polygones
 """
+
+
 from qgis.core import *
+from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
+from processing.tools.vector import VectorWriter
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from processing import *
 from math import ceil
 
 # limite du nombre maximum de deplacements
-DEMI_MAX_DEPLACEMENT = 150 # plus de 12 millions de calculs pour les 153 communes du Var pour en moyenne 4 dalles
+HALF_MAX_GAP = 150 # plus de 12 millions de calculs pour les 153 communes du Var pour en moyenne 4 dalles
+
 # limite de pourcentage de taille du buffer
 MAX_OVERLAP = 40
 
 # fonction utile
-milieu = lambda a, b : a + (b - a) / 2.0
+center_of = lambda a, b : a + (b - a) / 2.0
 
 #on renomme les variables
 src_file = couche_de_polygones
@@ -105,22 +118,22 @@ tile_bound = emprise_de_la_dalle
 object_bound = emprise_de_l_objet
 no_blank = sans_dalle_blanche
 gap = pas_de_decalage_pour_chercher_un_minimum_de_dalles
-
+output = couche_de_couverture
 # pre-traitement des variables
 # faut un minimum ;)
 if tile_dx <= 1 or tile_dy <= 1:
-    raise GeoAlgorithmExecutionException('la taille de la dalle n\'est pas suffisante')
+    raise GeoAlgorithmExecutionException('La taille de la dalle n\'est pas suffisante, essaie encore')
 
 # trop c'est trop !
 if overlap_percentage > MAX_OVERLAP:
-    raise GeoAlgorithmExecutionException("Information: You choose %s. for overlap percentage. Maximum is %s ... Why not try something around %s next time ? "%(overlap_percentage, MAX_OVERLAP, MAX_OVERLAP / 10))
+    raise GeoAlgorithmExecutionException("You choose %s. for overlap percentage. Maximum is %s ... Why not try something around %s next time ? "%(overlap_percentage, MAX_OVERLAP, MAX_OVERLAP / 10))
 
 # on ne garde que les dalles qui intersectent le polygone si on a defini un pas de decalage
 if gap > 0:
     no_blank = True
     # plus de pb memoire mais ca va etre horriblement long
-    if max(tile_dx, tile_dy) / gap > DEMI_MAX_DEPLACEMENT:
-        gap = int(ceil(max(tile_dx, tile_dy) / DEMI_MAX_DEPLACEMENT)) * 5
+    if max(tile_dx, tile_dy) / gap > HALF_MAX_GAP:
+        gap = int(ceil(max(tile_dx, tile_dy) / HALF_MAX_GAP)) * 5
         raise GeoAlgorithmExecutionException("You choose a too small value for pas_de_decalage_pour_chercher_un_minimum_de_dalles. Why not try something around %s next time ? "%gap)
 
 # ouverture de la couche support d'entree
@@ -128,46 +141,56 @@ layer = processing.getObject(src_file)
 provider = layer.dataProvider()
 fields = provider.fields()
 feats = processing.features(layer)
-nb_feat = len(feats)
-
-# preparation de la couche grille
-grille = QgsVectorLayer("Polygon", "couche_de_couverture_de_"+ str(layer.name()), "memory")
-QgsMapLayerRegistry.instance().addMapLayer(grille)
-dp_grille = grille.dataProvider()
+nb_feats = len(feats)
+if layer.geometryType() <> 2:  # TODO polygons il faudrait trouver le fichier de constantes
+    raise GeoAlgorithmExecutionException('You did not choose a polygon layer...')
 
 # definition des attributs supplementaires
-attributs_sup = ('id_poly', 'id_tile', 'id_poly_tile')
-attributs_sup_tri = ('ord_poly_tile',)
-attributs_sup_grid = ('min_x_tile', 'max_x_tile', 'min_y_tile', 'max_y_tile', )
-attributs_sup_env = ('min_x_poly', 'max_x_poly', 'min_y_poly', 'max_y_poly', )
+grid_fields = QgsFields()
+additional_attributes = ('id_poly', 'id_tile', 'id_poly_tile', "row_poly_tile", "col_poly_tile")
+additional_attributes_ord = ('ord_poly_tile',)
+additional_attributes_grid = ('min_x_tile', 'max_x_tile', 'min_y_tile', 'max_y_tile')
+additional_attributes_env = ('min_x_poly', 'max_x_poly', 'min_y_poly', 'max_y_poly')
 for f in fields:
-    dp_grille.addAttributes([f])
+    grid_fields.append(f)
     field_name = f.name()
+
     # en concurrence avec un attribut supplementaire
-    if (field_name in attributs_sup) or (field_name in attributs_sup_tri) or \
-        (tile_bound and field_name in attributs_sup_grid) or \
-        (object_bound and field_name in attributs_sup_env):
-        raise GeoAlgorithmExecutionException('le champ %s existe deja, modifier le code du script ou la table '%field_name)
+    if (field_name in additional_attributes) or (field_name in additional_attributes_ord) or \
+        (tile_bound and field_name in additional_attributes_grid) or \
+        (object_bound and field_name in additional_attributes_env):
+        raise GeoAlgorithmExecutionException('Le champ %s existe deja, modifier le code du script ou la table'%field_name)
+
 # ajout des attributs supplementaires standards
-for attr in attributs_sup:
-    dp_grille.addAttributes([QgsField(attr, QVariant.Int)])
-for attr in attributs_sup_tri:
-    dp_grille.addAttributes([QgsField(attr, QVariant.String)])
+for attr in additional_attributes:
+    grid_fields.append(QgsField(attr, QVariant.Int))
+for attr in additional_attributes_ord:
+    grid_fields.append(QgsField(attr, QVariant.String))
+
 # ajout des attributs supplementaires de coordonnees de la dalle
 if tile_bound:
-    for attr in attributs_sup_grid:
-        dp_grille.addAttributes([QgsField(attr, QVariant.Double)])
+    for attr in additional_attributes_grid:
+        grid_fields.append(QgsField(attr, QVariant.Double))
+
 # ajout des attributs supplementaires de coordonnees de l'enveloppe du polygone (bufferise) support
 if object_bound:
-    for attr in attributs_sup_env:
-        dp_grille.addAttributes([QgsField(attr, QVariant.Double)])
+    for attr in additional_attributes_env:
+        grid_fields.append(QgsField(attr, QVariant.Double))
+
+# preparation de la couche grille
+vw_grid = VectorWriter(
+                            output,
+                            None,
+                            grid_fields,
+                            provider.geometryType(),
+                            layer.crs()
+                        )
 
 id_poly = 0
 id_tile = 0
-grille.startEditing()
 # pour tous les polygones
 for feature in feats:
-    progress.setPercentage(int(100 * id_poly / nb_feat))
+    progress.setPercentage(int(100 * id_poly / nb_feats))
 
     # get the feature bounding box
     bounding_geom = feature.geometry().boundingBox()
@@ -187,94 +210,108 @@ for feature in feats:
         max_y_poly = bounding_geom.yMaximum()
 
     # dimensions des cases/dalles
-    taille_poly_x = max_x_poly - min_x_poly
-    taille_poly_y = max_y_poly - min_y_poly
-    nombre_case_x = int(ceil(taille_poly_x / tile_dx))
-    nombre_case_y = int(ceil(taille_poly_y / tile_dy))
-    milieu_x = milieu(min_x_poly, max_x_poly)
-    milieu_y = milieu(min_y_poly, max_y_poly)
-    minimum_x_centre = milieu_x - tile_dx * nombre_case_x / 2.0
-    minimum_y_centre = milieu_y - tile_dy * nombre_case_y / 2.0
-    marge_x = nombre_case_x * tile_dx - taille_poly_x
-    marge_y = nombre_case_y * tile_dy - taille_poly_y
+    poly_size_x = max_x_poly - min_x_poly
+    poly_size_y = max_y_poly - min_y_poly
+    tile_number_x = int(ceil(poly_size_x / tile_dx))
+    tile_number_y = int(ceil(poly_size_y / tile_dy))
+    center_x = center_of(min_x_poly, max_x_poly)
+    center_y = center_of(min_y_poly, max_y_poly)
+    minimum_x_center = center_x - tile_dx * tile_number_x / 2.0
+    minimum_y_center = center_y - tile_dy * tile_number_y / 2.0
+    margin_x = tile_number_x * tile_dx - poly_size_x
+    margin_y = tile_number_y * tile_dy - poly_size_y
 
     # pour ne pas deplacer les dalles en dehors de l'emprise du polygone bufferise quand
     # on calculera la grille deplacee en limite
-    limite_decalage_x = lambda x : -marge_x / 2.0 if x < -marge_x / 2.0 else x if x < marge_x / 2.0 else marge_x / 2.0
-    limite_decalage_y = lambda y : -marge_y / 2.0 if y < -marge_y / 2.0 else y if y < marge_y / 2.0 else marge_y / 2.0
+    shift_limit_x = lambda x : -margin_x / 2.0 if x < -margin_x / 2.0 else x if x < margin_x / 2.0 else margin_x / 2.0
+    shift_limit_y = lambda y : -margin_y / 2.0 if y < -margin_y / 2.0 else y if y < margin_y / 2.0 else margin_y / 2.0
 
     # peut-on chercher a optimiser le nombre de dalles ?
-    if nombre_case_x * nombre_case_y <= 2 or gap == 0: # pas d'optimisation possible ou desiree
-        minimum_ajustement_x_pas = 0
-        minimum_ajustement_y_pas = 0
+    if tile_number_x * tile_number_y <= 2 or gap == 0: # pas d'optimisation possible ou desiree
+        minimum_ajustment_x_step = 0
+        minimum_ajustment_y_step = 0
     else:
         # on calcule le nombre de decalages possibles, arrondi superieur pour aller a la limite
-        demi_nombre_essais_decalage_x = int(ceil(marge_x / 2.0 / gap))
-        demi_nombre_essais_decalage_y = int(ceil(marge_y / 2.0 / gap))
+        half_max_shift_number_x = int(ceil(margin_x / 2.0 / gap))
+        half_max_shift_number_y = int(ceil(margin_y / 2.0 / gap))
+
         # nombre de case minimum intersectant le polygone
-        minimum_case = 0
+        minimum_tile_number = 0
+
         # on parcourt tous les decalages possibles
-        for ajustement_x_pas in range(-demi_nombre_essais_decalage_x, demi_nombre_essais_decalage_x + 1):
-            for ajustement_y_pas in range(-demi_nombre_essais_decalage_y, demi_nombre_essais_decalage_y + 1):
-                nombre_intersection = 0
+        for ajustment_x_step in range(-half_max_shift_number_x, half_max_shift_number_x + 1):
+            for ajustment_y_step in range(-half_max_shift_number_y, half_max_shift_number_y + 1):
+                intersect_number = 0
+
                 # on cherche pour toutes les dalles si elles intersectent le polygone bufferise
-                for case_x in range(nombre_case_x):
-                    for case_y in range(nombre_case_y):
+                for tile_x in range(tile_number_x):
+                    for tile_y in range(tile_number_y):
                         rectangle = QgsGeometry.fromRect( \
                                         QgsRectangle( \
-                                            minimum_x_centre + case_x * tile_dx + limite_decalage_x(ajustement_x_pas * gap), \
-                                            minimum_y_centre + case_y * tile_dy + limite_decalage_y(ajustement_y_pas * gap), \
-                                            minimum_x_centre + (case_x + 1) * tile_dx + limite_decalage_x(ajustement_x_pas * gap), \
-                                            minimum_y_centre + (case_y + 1) * tile_dy + limite_decalage_y(ajustement_y_pas * gap)))
+                                            minimum_x_center + tile_x * tile_dx + shift_limit_x(ajustment_x_step * gap), \
+                                            minimum_y_center + tile_y * tile_dy + shift_limit_y(ajustment_y_step * gap), \
+                                            minimum_x_center + (tile_x + 1) * tile_dx + shift_limit_x(ajustment_x_step * gap), \
+                                            minimum_y_center + (tile_y + 1) * tile_dy + shift_limit_y(ajustment_y_step * gap)))
+
                         # l'intersection se fait avec le polygone bufferise
                         if rectangle.intersects(buffer_geom):
-                            nombre_intersection += 1
+                            intersect_number += 1
+
                 # on conserve la premiere valeur minimale proche de la moyenne en distance
-                if nombre_intersection < minimum_case or minimum_case == 0:
-                    ponderation = (ajustement_x_pas - demi_nombre_essais_decalage_x)**2 + (ajustement_y_pas - demi_nombre_essais_decalage_y)**2
-                    minimum_case = nombre_intersection
-                    minimum_ajustement_x_pas = ajustement_x_pas
-                    minimum_ajustement_y_pas = ajustement_y_pas
-                    minimum_ponderation = ponderation
-                elif nombre_intersection == minimum_case:
-                    ponderation = (ajustement_x_pas - demi_nombre_essais_decalage_x)**2 + (ajustement_y_pas - demi_nombre_essais_decalage_y)**2
-                    if ponderation < minimum_ponderation:
-                        minimum_case = nombre_intersection
-                        minimum_ajustement_x_pas = ajustement_x_pas
-                        minimum_ajustement_y_pas = ajustement_y_pas
-                        minimum_ponderation = ponderation
+                if intersect_number < minimum_tile_number or minimum_tile_number == 0:
+                    balance = (ajustment_x_step - half_max_shift_number_x)**2 + (ajustment_y_step - half_max_shift_number_y)**2
+                    minimum_tile_number = intersect_number
+                    minimum_ajustment_x_step = ajustment_x_step
+                    minimum_ajustment_y_step = ajustment_y_step
+                    minimum_balance = balance
+                elif intersect_number == minimum_tile_number:
+                    balance = (ajustment_x_step - half_max_shift_number_x)**2 + (ajustment_y_step - half_max_shift_number_y)**2
+                    if balance < minimum_balance:
+                        minimum_tile_number = intersect_number
+                        minimum_ajustment_x_step = ajustment_x_step
+                        minimum_ajustment_y_step = ajustment_y_step
+                        minimum_balance = balance
 
     # on a determine la position des dalles, on peut maintenant creer la grille pour ce polygone
     id_poly += 1
     id_poly_tile = 0
-    for case_x in range(nombre_case_x):
-        for case_y in range(nombre_case_y):
+    row_poly_tile = 0
+    for tile_x in range(tile_number_x):
+        row_poly_tile += 1
+        col_poly_tile = 0
+        for tile_y in range(tile_number_y):
+            col_poly_tile += 1
+
             # on recalcule la dalle
-            min_x_tile = minimum_x_centre + case_x * tile_dx + limite_decalage_x(minimum_ajustement_x_pas * gap)
-            min_y_tile = minimum_y_centre + case_y * tile_dy + limite_decalage_y(minimum_ajustement_y_pas * gap)
-            max_x_tile = minimum_x_centre + (case_x + 1) * tile_dx + limite_decalage_x(minimum_ajustement_x_pas * gap)
-            max_y_tile = minimum_y_centre + (case_y + 1) * tile_dy + limite_decalage_y(minimum_ajustement_y_pas * gap)
-            rectangle = QgsGeometry.fromRect(QgsRectangle( min_x_tile, min_y_tile, max_x_tile, max_y_tile))
+            min_x_tile = minimum_x_center + tile_x * tile_dx + shift_limit_x(minimum_ajustment_x_step * gap)
+            min_y_tile = minimum_y_center + tile_y * tile_dy + shift_limit_y(minimum_ajustment_y_step * gap)
+            max_x_tile = minimum_x_center + (tile_x + 1) * tile_dx + shift_limit_x(minimum_ajustment_x_step * gap)
+            max_y_tile = minimum_y_center + (tile_y + 1) * tile_dy + shift_limit_y(minimum_ajustment_y_step * gap)
+            rectangle = QgsGeometry.fromRect(QgsRectangle(min_x_tile, min_y_tile, max_x_tile, max_y_tile))
+
             # l'intersection se fait avec le polygone bufferise
             if not no_blank or (no_blank and rectangle.intersects(buffer_geom)):
                 id_tile += 1
                 id_poly_tile += 1
                 new_feat = QgsFeature()
                 new_feat.setGeometry(rectangle)
-                attribute_values = feature.attributes()[:]                                             # attributs standards
-                attribute_values.extend([id_poly, id_tile, id_poly_tile])                              # attributs supplementaires
-                attribute_values.append("%s#%s"%(feature[ord_field], ("0000%s"%id_poly_tile)[-4:]))    # attribut supplementaire pour tri
+                # attributs standards
+                attribute_values = feature.attributes()[:]                                              
+                # attributs supplementaires
+                attribute_values.extend([id_poly, id_tile, id_poly_tile, row_poly_tile, col_poly_tile]) 
+                # attribut supplementaire pour tri
+                attribute_values.append("%s#%s"%(feature[ord_field], ("0000%s"%id_poly_tile)[-4:]))     
+                # attributs supplementaires coord dalle
                 if tile_bound:
-                    attribute_values.extend([min_x_tile, max_x_tile, min_y_tile, max_y_tile])          # attributs supplementaires coord dalle
+                    attribute_values.extend([min_x_tile, max_x_tile, min_y_tile, max_y_tile])           
+                # attributs supplementaires coord enveloppe
                 if object_bound:
-                    attribute_values.extend([min_x_poly, max_x_poly, min_y_poly, max_y_poly])          # attributs supplementaires coord enveloppe
+                    attribute_values.extend([min_x_poly, max_x_poly, min_y_poly, max_y_poly])           
+
+                # ajoute les geometries et valeurs des enregistrements
                 new_feat.setAttributes(attribute_values)
-                dp_grille.addFeatures([new_feat])        # ajoute les geometries et valeurs des enregistrements
-                dp_grille.updateExtents()                # quitte le mode edition et enregistre les modifs
-
-grille.commitChanges()
-
-iface.mapCanvas().refresh()
+                vw_grid.addFeature(new_feat)
+del vw_grid
 
 # pour memoire :
 #QMessageBox.information(None,"DEBUGn: " , "texte") # pas recommande !
