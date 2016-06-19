@@ -39,6 +39,8 @@ La couche de sortie en plus des attributs conserves presente 4 attributs supplem
 - 'id_poly'       un entier pour chaque objet d'origine
 - 'id_tile'       un entier unique par dalle
 - 'id_poly_tile'  un entier unique par dalle pour chaque 'id_poly'
+- 'row_poly_tile' la ligne de la dalle pour chaque 'id_poly'
+- 'col_poly_tile' la colonne de la dalle pour chaque 'id_poly'
 - 'ord_poly_tile' une valeur de tri composee du champ choisi et de l'entier unique par dalle pour chaque 'id_poly'
 
 Et si on a demande les coordonnees de la dalle :
@@ -59,8 +61,8 @@ ou e version de QGIS >= 14
 - "id_poly" = attribute( @atlasfeature, 'id_poly' )
 
 Versions :
-- V1.b du 27 mai 2016 osvy
-- V1.1 du 27 mai 2016 jean-christophe.baudin@onema.fr
+- V1.b du 27 mai 2016 version python ogr osvy
+- V1.1 du 27 mai 2016 version processing jean-christophe.baudin@onema.fr
 - V1.2 du 29 mai 2016
 - V1.3 du 31 mai 2016
 - V1.4 du 31 mai 2016 changement complet du traitement des optimisations
@@ -68,3 +70,7 @@ Versions :
                       quelques variables renommees,
                       une chaine de tri ajoutee en sortie
 - V1.5.1 du 3 juin 2016 renommage de variables
+- V1.5.2 du 18 juin 2016 numérotation des dalles en lignes et colonnes pour chaque polygone
+- V1.6.0 du 19 juin 2016 possibilite d'enregistrer la couche produite sur disque,
+                        renommage de variables en vue version anglaise,
+                        verifie que la couche en entree est une couche de polygones
