@@ -1,5 +1,5 @@
 ##Vector=group
-##couche_de_couverture_v160=name
+##couche_de_couverture_v161=name
 ##couche_de_polygones=vector
 ##champ_de_tri=field couche_de_polygones
 ##largeur_d_une_dalle=number 7000.0
@@ -88,6 +88,7 @@ Versions :
 - V1.6.0 du 19 juin 2016 possibilite d'enregistrer la couche produite sur disque,
                         renommage de variables en vue version anglaise,
                         verifie que la couche en entree est une couche de polygones
+- V1.6.1 du 19 juin 2016 modifications mineures pour etudiers le cas ou la couche en entree n'a aucun attribut
 """
 
 
@@ -115,10 +116,11 @@ tile_dx = largeur_d_une_dalle
 tile_dy = hauteur_d_une_dalle
 overlap_percentage = pourcentage_autour_de_l_objet
 tile_bound = emprise_de_la_dalle
-object_bound = emprise_de_l_objet
+poly_bound = emprise_de_l_objet
 no_blank = sans_dalle_blanche
 gap = pas_de_decalage_pour_chercher_un_minimum_de_dalles
 output = couche_de_couverture
+
 # pre-traitement des variables
 # faut un minimum ;)
 if tile_dx <= 1 or tile_dy <= 1:
@@ -148,34 +150,29 @@ if layer.geometryType() <> 2:  # TODO polygons il faudrait trouver le fichier de
 # definition des attributs supplementaires
 grid_fields = QgsFields()
 additional_attributes = ('id_poly', 'id_tile', 'id_poly_tile', "row_poly_tile", "col_poly_tile")
-additional_attributes_ord = ('ord_poly_tile',)
-additional_attributes_grid = ('min_x_tile', 'max_x_tile', 'min_y_tile', 'max_y_tile')
-additional_attributes_env = ('min_x_poly', 'max_x_poly', 'min_y_poly', 'max_y_poly')
+additional_attributes_ord = ('ord_poly_tile',) if ord_field else ()
+additional_attributes_tile_bound = ('min_x_tile', 'max_x_tile', 'min_y_tile', 'max_y_tile') if tile_bound else ()
+additional_attributes_poly_bound = ('min_x_poly', 'max_x_poly', 'min_y_poly', 'max_y_poly') if poly_bound else ()
 for f in fields:
     grid_fields.append(f)
     field_name = f.name()
 
     # en concurrence avec un attribut supplementaire
-    if (field_name in additional_attributes) or (field_name in additional_attributes_ord) or \
-        (tile_bound and field_name in additional_attributes_grid) or \
-        (object_bound and field_name in additional_attributes_env):
+    if (field_name in additional_attributes) or \
+       (field_name in additional_attributes_ord) or \
+       (field_name in additional_attributes_tile_bound) or \
+       (field_name in additional_attributes_poly_bound):
         raise GeoAlgorithmExecutionException('Le champ %s existe deja, modifier le code du script ou la table'%field_name)
 
-# ajout des attributs supplementaires standards
+# ajout des attributs supplementaires
 for attr in additional_attributes:
     grid_fields.append(QgsField(attr, QVariant.Int))
 for attr in additional_attributes_ord:
     grid_fields.append(QgsField(attr, QVariant.String))
-
-# ajout des attributs supplementaires de coordonnees de la dalle
-if tile_bound:
-    for attr in additional_attributes_grid:
-        grid_fields.append(QgsField(attr, QVariant.Double))
-
-# ajout des attributs supplementaires de coordonnees de l'enveloppe du polygone (bufferise) support
-if object_bound:
-    for attr in additional_attributes_env:
-        grid_fields.append(QgsField(attr, QVariant.Double))
+for attr in additional_attributes_tile_bound:
+    grid_fields.append(QgsField(attr, QVariant.Double))
+for attr in additional_attributes_poly_bound:
+    grid_fields.append(QgsField(attr, QVariant.Double))
 
 # preparation de la couche grille
 vw_grid = VectorWriter(
@@ -300,12 +297,13 @@ for feature in feats:
                 # attributs supplementaires
                 attribute_values.extend([id_poly, id_tile, id_poly_tile, row_poly_tile, col_poly_tile]) 
                 # attribut supplementaire pour tri
-                attribute_values.append("%s#%s"%(feature[ord_field], ("0000%s"%id_poly_tile)[-4:]))     
+                if ord_field:
+                    attribute_values.append("%s#%s"%(feature[ord_field], ("0000%s"%id_poly_tile)[-4:]))     
                 # attributs supplementaires coord dalle
                 if tile_bound:
                     attribute_values.extend([min_x_tile, max_x_tile, min_y_tile, max_y_tile])           
                 # attributs supplementaires coord enveloppe
-                if object_bound:
+                if poly_bound:
                     attribute_values.extend([min_x_poly, max_x_poly, min_y_poly, max_y_poly])           
 
                 # ajoute les geometries et valeurs des enregistrements
