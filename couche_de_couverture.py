@@ -1,5 +1,5 @@
-##Vector=group
-##couche_de_couverture_v161=name
+##Vecteur=group
+##couche_de_couverture_v162=name
 ##couche_de_polygones=vector
 ##champ_de_tri=field couche_de_polygones
 ##largeur_d_une_dalle=number 7000.0
@@ -70,9 +70,25 @@ Et si on a demande les coordonnees de l'enveloppe de l'objet d'origine :
 - 'max_y_poly'    un double pour la valeur y max
 
 On peut filtrer l'affichage de la grille quand un composeur est actif en utilisant dans le style une regle comme :
-- "id_poly" = attribute( $atlasfeature, 'id_poly' )
+- 'id_poly' = attribute( $atlasfeature, 'id_poly' )
 ou e version de QGIS >= 14
-- "id_poly" = attribute( @atlasfeature, 'id_poly' )
+- 'id_poly' = attribute( @atlasfeature, 'id_poly' )
+
+Pour une future i18n :
+    'La taille de la dalle n\'est pas suffisante, essaie encore'
+->    'Tiles\' dimensions are too small, try again!'
+
+    'Vous avez choisi {} comme pourcentage de tampon. Le maximum est {}... Pourquoi ne pas essayer environ {} la prochaine fois ?'
+->    'You choose {}. for overlap percentage. Maximum is {}... Why not try something around {} next time ?'
+
+    'Vous avez choisi une valeur trop petite de pas de decalage pour reduire le nombre de dalles. Le minimum est {}. Pourquoi ne pas essayer environ {} la prochaine fois ?'
+->    'You choose a too small value for pas_de_decalage_pour_chercher_un_minimum_de_dalles. Minimum is {}. Why not try something around {} next time ? '
+
+    'You did not choose a polygon layer...'
+->    'Vous n\'avez pas selectionne une couche de polygones...'
+
+    'Le champ {} existe deja, modifier le code du script ou la table'
+->    'Column {} is in original table, you must change either script or table'
 
 Versions :
 - V1.b du 27 mai 2016 version python ogr osvy
@@ -84,11 +100,18 @@ Versions :
                       quelques variables renommees,
                       une chaine de tri ajoutee en sortie
 - V1.5.1 du 3 juin 2016 renommage de variables
-- V1.5.2 du 18 juin 2016 numérotation des dalles en lignes et colonnes pour chaque polygone
+- V1.5.2 du 18 juin 2016 numerotation des dalles en lignes et colonnes pour chaque polygone
 - V1.6.0 du 19 juin 2016 possibilite d'enregistrer la couche produite sur disque,
                         renommage de variables en vue version anglaise,
                         verifie que la couche en entree est une couche de polygones
-- V1.6.1 du 19 juin 2016 modifications mineures pour etudiers le cas ou la couche en entree n'a aucun attribut
+- V1.6.1 du 20 juin 2016 modifications mineures pour etudier le cas ou la couche en entree n'a aucun attribut
+- V1.6.2 du 25 juin 2016 utilisation de format() pour les sorties
+
+Note :
+    avec une version recente de qgis/processing il faut remplacer en ligne 4 
+        ##champ_de_tri=field couche_de_polygones
+    par
+        ##champ_de_tri=optional field couche_de_polygones
 """
 
 
@@ -100,6 +123,7 @@ from PyQt4.QtGui import *
 from processing import *
 from math import ceil
 
+
 # limite du nombre maximum de deplacements
 HALF_MAX_GAP = 150 # plus de 12 millions de calculs pour les 153 communes du Var pour en moyenne 4 dalles
 
@@ -109,7 +133,7 @@ MAX_OVERLAP = 40
 # fonction utile
 center_of = lambda a, b : a + (b - a) / 2.0
 
-#on renomme les variables
+# on renomme les variables
 src_file = couche_de_polygones
 ord_field = champ_de_tri
 tile_dx = largeur_d_une_dalle
@@ -128,15 +152,15 @@ if tile_dx <= 1 or tile_dy <= 1:
 
 # trop c'est trop !
 if overlap_percentage > MAX_OVERLAP:
-    raise GeoAlgorithmExecutionException("You choose %s. for overlap percentage. Maximum is %s ... Why not try something around %s next time ? "%(overlap_percentage, MAX_OVERLAP, MAX_OVERLAP / 10))
+    raise GeoAlgorithmExecutionException('Vous avez choisi {} comme pourcentage de tampon. Le maximum est {}... Pourquoi ne pas essayer environ {} la prochaine fois ?'.format(overlap_percentage, MAX_OVERLAP, MAX_OVERLAP / 10))
 
 # on ne garde que les dalles qui intersectent le polygone si on a defini un pas de decalage
 if gap > 0:
     no_blank = True
     # plus de pb memoire mais ca va etre horriblement long
     if max(tile_dx, tile_dy) / gap > HALF_MAX_GAP:
-        gap = int(ceil(max(tile_dx, tile_dy) / HALF_MAX_GAP)) * 5
-        raise GeoAlgorithmExecutionException("You choose a too small value for pas_de_decalage_pour_chercher_un_minimum_de_dalles. Why not try something around %s next time ? "%gap)
+        gap = int(ceil(max(tile_dx, tile_dy) / HALF_MAX_GAP))
+        raise GeoAlgorithmExecutionException('Vous avez choisi une valeur trop petite de pas de decalage pour reduire le nombre de dalles. Le minimum est {}. Pourquoi ne pas essayer environ {} la prochaine fois ?'.format(gap, gap * 5))
 
 # ouverture de la couche support d'entree
 layer = processing.getObject(src_file)
@@ -145,11 +169,11 @@ fields = provider.fields()
 feats = processing.features(layer)
 nb_feats = len(feats)
 if layer.geometryType() <> 2:  # TODO polygons il faudrait trouver le fichier de constantes
-    raise GeoAlgorithmExecutionException('You did not choose a polygon layer...')
+    raise GeoAlgorithmExecutionException('Vous n\'avez pas selectionne une couche de polygones...')
 
 # definition des attributs supplementaires
 grid_fields = QgsFields()
-additional_attributes = ('id_poly', 'id_tile', 'id_poly_tile', "row_poly_tile", "col_poly_tile")
+additional_attributes = ('id_poly', 'id_tile', 'id_poly_tile', 'row_poly_tile', 'col_poly_tile')
 additional_attributes_ord = ('ord_poly_tile',) if ord_field else ()
 additional_attributes_tile_bound = ('min_x_tile', 'max_x_tile', 'min_y_tile', 'max_y_tile') if tile_bound else ()
 additional_attributes_poly_bound = ('min_x_poly', 'max_x_poly', 'min_y_poly', 'max_y_poly') if poly_bound else ()
@@ -162,7 +186,7 @@ for f in fields:
        (field_name in additional_attributes_ord) or \
        (field_name in additional_attributes_tile_bound) or \
        (field_name in additional_attributes_poly_bound):
-        raise GeoAlgorithmExecutionException('Le champ %s existe deja, modifier le code du script ou la table'%field_name)
+        raise GeoAlgorithmExecutionException('Le champ {} existe deja, modifier le code du script ou la table'.format(field_name))
 
 # ajout des attributs supplementaires
 for attr in additional_attributes:
@@ -175,13 +199,7 @@ for attr in additional_attributes_poly_bound:
     grid_fields.append(QgsField(attr, QVariant.Double))
 
 # preparation de la couche grille
-vw_grid = VectorWriter(
-                            output,
-                            None,
-                            grid_fields,
-                            provider.geometryType(),
-                            layer.crs()
-                        )
+vw_grid = VectorWriter(output, None, grid_fields, provider.geometryType(), layer.crs())
 
 id_poly = 0
 id_tile = 0
@@ -298,7 +316,7 @@ for feature in feats:
                 attribute_values.extend([id_poly, id_tile, id_poly_tile, row_poly_tile, col_poly_tile]) 
                 # attribut supplementaire pour tri
                 if ord_field:
-                    attribute_values.append("%s#%s"%(feature[ord_field], ("0000%s"%id_poly_tile)[-4:]))     
+                    attribute_values.append('{}#{:04d}'.format(feature[ord_field], id_poly_tile))     
                 # attributs supplementaires coord dalle
                 if tile_bound:
                     attribute_values.extend([min_x_tile, max_x_tile, min_y_tile, max_y_tile])           
@@ -312,7 +330,7 @@ for feature in feats:
 del vw_grid
 
 # pour memoire :
-#QMessageBox.information(None,"DEBUGn: " , "texte") # pas recommande !
+#QMessageBox.information(None, 'DEBUGn: ' , 'texte') # pas recommande !
 #progress.setInfo('texte')
+#progress.setText('texte')
 #raise GeoAlgorithmExecutionException('texte')
-#progress.setText(text)
