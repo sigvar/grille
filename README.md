@@ -56,9 +56,25 @@ Et si on a demande les coordonnees de l'enveloppe de l'objet d'origine :
 - 'max_y_poly'    un double pour la valeur y max
 
 On peut filtrer l'affichage de la grille quand un composeur est actif en utilisant dans le style une regle comme :
-- "id_poly" = attribute( $atlasfeature, 'id_poly' )
+- 'id_poly' = attribute( $atlasfeature, 'id_poly' )
 ou e version de QGIS >= 14
-- "id_poly" = attribute( @atlasfeature, 'id_poly' )
+- 'id_poly' = attribute( @atlasfeature, 'id_poly' )
+
+Pour une future i18n :
+    'La taille de la dalle n\'est pas suffisante, essaie encore'
+->    'Tiles\' dimensions are too small, try again!'
+
+    'Vous avez choisi {} comme pourcentage de tampon. Le maximum est {}... Pourquoi ne pas essayer environ {} la prochaine fois ?'
+->    'You choose {}. for overlap percentage. Maximum is {}... Why not try something around {} next time ?'
+
+    'Vous avez choisi une valeur trop petite de pas de decalage pour reduire le nombre de dalles. Le minimum est {}. Pourquoi ne pas essayer environ {} la prochaine fois ?'
+->    'You choose a too small value for pas_de_decalage_pour_chercher_un_minimum_de_dalles. Minimum is {}. Why not try something around {} next time ? '
+
+    'You did not choose a polygon layer...'
+->    'Vous n\'avez pas selectionne une couche de polygones...'
+
+    'Le champ {} existe deja, modifier le code du script ou la table'
+->    'Column {} is in original table, you must change either script or table'
 
 Versions :
 - V1.b du 27 mai 2016 version python ogr osvy
@@ -70,7 +86,15 @@ Versions :
                       quelques variables renommees,
                       une chaine de tri ajoutee en sortie
 - V1.5.1 du 3 juin 2016 renommage de variables
-- V1.5.2 du 18 juin 2016 numérotation des dalles en lignes et colonnes pour chaque polygone
+- V1.5.2 du 18 juin 2016 numerotation des dalles en lignes et colonnes pour chaque polygone
 - V1.6.0 du 19 juin 2016 possibilite d'enregistrer la couche produite sur disque,
                         renommage de variables en vue version anglaise,
                         verifie que la couche en entree est une couche de polygones
+- V1.6.1 du 20 juin 2016 modifications mineures pour etudier le cas ou la couche en entree n'a aucun attribut
+- V1.6.2 du 25 juin 2016 utilisation de format() pour les sorties
+
+Note :
+    avec une version recente de qgis/processing il faut remplacer en ligne 4 
+        ##champ_de_tri=field couche_de_polygones
+    par
+        ##champ_de_tri=optional field couche_de_polygones
